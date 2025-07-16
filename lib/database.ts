@@ -15,9 +15,17 @@ export async function initDatabase() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
+        profile_image TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+        // Add profile_image column if it doesn't exist (for existing databases)
+        try {
+            await db.execute(`ALTER TABLE users ADD COLUMN profile_image TEXT`);
+        } catch (error) {
+            // Column already exists, ignore error
+        }
 
         // Tweets table
         await db.execute(`
@@ -57,6 +65,7 @@ export interface User {
     id: number;
     username: string;
     password?: string;
+    profile_image?: string;
     created_at: string;
 }
 
@@ -86,11 +95,11 @@ export async function createUser(
         });
 
         const userResult = await db.execute({
-            sql: 'SELECT id, username, created_at FROM users WHERE id = ?',
-            args: [result.lastInsertRowid],
+            sql: 'SELECT id, username, profile_image, created_at FROM users WHERE id = ?',
+            args: [Number(result.lastInsertRowid)],
         });
 
-        return userResult.rows[0] as User;
+        return userResult.rows[0] as unknown as User;
     } catch (error) {
         console.error('Create user error:', error);
         return null;
@@ -107,7 +116,7 @@ export async function authenticateUser(
             args: [username],
         });
 
-        const user = result.rows[0] as User & { password: string };
+        const user = result.rows[0] as unknown as User & { password: string };
         if (!user) return null;
 
         const isValid = await bcrypt.compare(password, user.password);
@@ -125,10 +134,10 @@ export async function authenticateUser(
 export async function getUserById(id: number): Promise<User | null> {
     try {
         const result = await db.execute({
-            sql: 'SELECT id, username, created_at FROM users WHERE id = ?',
+            sql: 'SELECT id, username, profile_image, created_at FROM users WHERE id = ?',
             args: [id],
         });
-        return result.rows[0] as User;
+        return result.rows[0] as unknown as User;
     } catch (error) {
         console.error('Get user error:', error);
         return null;
@@ -147,14 +156,14 @@ export async function createTweet(
         });
 
         const tweetResult = await db.execute({
-            sql: `SELECT t.*, u.username 
+            sql: `SELECT t.*, u.username, u.profile_image
             FROM tweets t 
             JOIN users u ON t.user_id = u.id 
             WHERE t.id = ?`,
-            args: [result.lastInsertRowid],
+            args: [Number(result.lastInsertRowid)],
         });
 
-        return tweetResult.rows[0] as Tweet;
+        return tweetResult.rows[0] as unknown as Tweet;
     } catch (error) {
         console.error('Create tweet error:', error);
         return null;
@@ -167,6 +176,7 @@ export async function getTweets(userId?: number): Promise<Tweet[]> {
             sql: `SELECT 
               t.*,
               u.username,
+              u.profile_image,
               CASE WHEN li.user_id IS NOT NULL THEN 1 ELSE 0 END as liked,
               CASE WHEN rt.user_id IS NOT NULL THEN 1 ELSE 0 END as retweeted
             FROM tweets t
@@ -177,7 +187,7 @@ export async function getTweets(userId?: number): Promise<Tweet[]> {
             args: [userId || null, userId || null],
         });
 
-        return result.rows as Tweet[];
+        return result.rows as unknown as Tweet[];
     } catch (error) {
         console.error('Get tweets error:', error);
         return [];
@@ -237,3 +247,19 @@ export async function toggleTweetInteraction(
 
 // Initialize database on import
 initDatabase();
+
+export async function updateUserProfileImage(
+    userId: number,
+    profileImage: string
+): Promise<boolean> {
+    try {
+        await db.execute({
+            sql: 'UPDATE users SET profile_image = ? WHERE id = ?',
+            args: [profileImage, userId],
+        });
+        return true;
+    } catch (error) {
+        console.error('Update profile image error:', error);
+        return false;
+    }
+}
