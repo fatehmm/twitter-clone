@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import AuthForm from './components/AuthForm';
+import Sidebar from './components/Sidebar';
 import TweetComposer from './components/TweetComposer';
 import TweetFeed from './components/TweetFeed';
-import Sidebar from './components/Sidebar';
-import AuthForm from './components/AuthForm';
 import { useAuth } from './hooks/useAuth';
 
 export interface Tweet {
@@ -47,6 +47,24 @@ export default function Home() {
 
     useEffect(() => {
         if (!loading) {
+            const fetchTweets = async () => {
+                setLoadingTweets(true);
+                try {
+                    const headers: HeadersInit = {};
+                    if (token) {
+                        headers.Authorization = `Bearer ${token}`;
+                    }
+                    const response = await fetch('/api/tweets', { headers });
+                    if (response.ok) {
+                        const data = await response.json();
+                        setTweets(data);
+                    }
+                } catch (error) {
+                    console.error('Error fetching tweets:', error);
+                } finally {
+                    setLoadingTweets(false);
+                }
+            };
             fetchTweets();
         }
     }, [loading, token]);
@@ -129,7 +147,7 @@ export default function Home() {
 
     return (
         <div className="flex min-h-screen bg-black">
-            <Sidebar user={user!} onLogout={logout} />
+            <Sidebar user={user!} onLogout={logout} token={token!} />
             <main className="flex-1 max-w-2xl border-x border-gray-800">
                 <div className="sticky top-0 bg-black/80 backdrop-blur-md border-b border-gray-800 p-4">
                     <h1 className="text-xl font-bold">Home</h1>
